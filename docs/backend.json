@@ -1,0 +1,228 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the Athena Insights platform.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user.",
+          "format": "email"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the user."
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "URL of the user's profile photo.",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "displayName"
+      ]
+    },
+    "Entity": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Entity",
+      "type": "object",
+      "description": "Represents a company or entity being analyzed (e.g., Adani Power).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the entity (e.g., Adani Power)."
+        },
+        "ticker": {
+          "type": "string",
+          "description": "Stock ticker symbol of the entity."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "ticker"
+      ]
+    },
+    "AlternativeData": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AlternativeData",
+      "type": "object",
+      "description": "Represents alternative data sources fetched for an entity.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the alternative data entry."
+        },
+        "entityId": {
+          "type": "string",
+          "description": "Reference to Entity. (Relationship: Entity 1:N AlternativeData)"
+        },
+        "source": {
+          "type": "string",
+          "description": "Source of the data (e.g., Earnings, ESG, Patents, Market)."
+        },
+        "data": {
+          "type": "string",
+          "description": "The actual data, could be JSON or a string depending on source."
+        },
+        "fetchDate": {
+          "type": "string",
+          "description": "Date and time when the data was fetched.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "entityId",
+        "source",
+        "data",
+        "fetchDate"
+      ]
+    },
+    "AnalysisResult": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AnalysisResult",
+      "type": "object",
+      "description": "Represents the analysis results for an entity.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the analysis result."
+        },
+        "entityId": {
+          "type": "string",
+          "description": "Reference to Entity. (Relationship: Entity 1:N AnalysisResult)"
+        },
+        "riskLevel": {
+          "type": "string",
+          "description": "The risk level assessment (e.g., High, Medium, Low)."
+        },
+        "confidenceScore": {
+          "type": "number",
+          "description": "Confidence score of the analysis (0-1)."
+        },
+        "keyDrivers": {
+          "type": "array",
+          "description": "Key drivers influencing the risk assessment (ESG, Earnings, Market, Innovation).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "explainability": {
+          "type": "string",
+          "description": "Explainability section with aggregated reasons (JSON formatted string)."
+        },
+        "analysisDate": {
+          "type": "string",
+          "description": "Date and time when the analysis was performed.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "entityId",
+        "riskLevel",
+        "confidenceScore",
+        "keyDrivers",
+        "explainability",
+        "analysisDate"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profile information.  Access is restricted to the user themselves.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/entities/{entityId}",
+        "definition": {
+          "entityName": "Entity",
+          "schema": {
+            "$ref": "#/backend/entities/Entity"
+          },
+          "description": "Stores information about entities (e.g., company name, ticker).",
+          "params": [
+            {
+              "name": "entityId",
+              "description": "The unique identifier of the entity."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/entities/{entityId}/alternative_data/{alternativeDataId}",
+        "definition": {
+          "entityName": "AlternativeData",
+          "schema": {
+            "$ref": "#/backend/entities/AlternativeData"
+          },
+          "description": "Stores alternative data for each entity.",
+          "params": [
+            {
+              "name": "entityId",
+              "description": "The unique identifier of the entity."
+            },
+            {
+              "name": "alternativeDataId",
+              "description": "The unique identifier of the alternative data entry."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/entities/{entityId}/analysis_results/{analysisResultId}",
+        "definition": {
+          "entityName": "AnalysisResult",
+          "schema": {
+            "$ref": "#/backend/entities/AnalysisResult"
+          },
+          "description": "Stores the analysis results for each entity.",
+          "params": [
+            {
+              "name": "entityId",
+              "description": "The unique identifier of the entity."
+            },
+            {
+              "name": "analysisResultId",
+              "description": "The unique identifier of the analysis result."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to address the 'auth/unauthorized-domain' Firebase error, which arises from domain mismatch in Firebase Authentication, likely due to incorrect configuration in the Firebase console. This structure also ensures security, scalability, and debuggability following the principles of Authorization Independence, Clarity of Intent, DBAC (Database-Based Access Control), QAPs (Rules are not Filters), and Invariants. \n\n1.  **Authorization Independence:**  The structure avoids hierarchical authorization dependencies (`get()` calls in security rules) by denormalizing authorization data. For instance, if access to `alternative_data` or `analysis_results` needed to be restricted based on entity ownership or membership, relevant user identifiers or roles would be duplicated within those documents, eliminating the need to fetch parent document data during authorization.\n\n2.  **Clarity of Intent:** The structure uses explicit path-based ownership (e.g., `/users/{userId}/...`) where possible and membership maps (`members: {uid1: \"role\", uid2: \"role\"}`) where collaborative access is required.  This makes the intent of the security rules immediately obvious.\n\n3.  **DBAC (No Custom Claims):** User roles are managed directly within the database.  Authorization relies exclusively on `request.auth.uid` and database lookups, removing dependency on custom claims, which can add complexity.\n\n4.  **QAPs (Rules are not Filters):**  The structure facilitates secure `list` operations by ensuring that each collection has a homogeneous security posture.  This prevents the need for complex filtering logic within security rules.\n\n5.  **Invariants:**  The structure, combined with appropriate security rules, can enforce invariants such as ownership, timestamps, and denormalized data consistency.\n\nHere is a more detailed breakdown of how the structure supports these goals:\n\n*   `/users/{userId}`: Stores user profiles. Access is restricted to the user themselves.\n*   `/entities/{entityId}`: Stores the metadata of entities being analyzed (e.g. Adani Power). Publicly accessible for read operations or can be restricted, depending on the use case. \n*   `/entities/{entityId}/alternative_data/{alternativeDataId}`: Stores alternative data for each entity.  To achieve Authorization Independence, if access to alternative data needs to be restricted based on entity membership, we would denormalize a `members` map or an `ownerId` field into these documents.  Since we are not giving a specific requirement on how to authorize this data, we are assuming public read access for simplicity.\n*   `/entities/{entityId}/analysis_results/{analysisResultId}`: Stores the analysis results for each entity. Similar to `alternative_data`, we would denormalize authorization data into these documents if access control beyond public read is required.\n\nThis structure ensures that security rules are simple, robust, and easily debuggable, while also supporting the application's core features and scalability requirements.  The explicit modeling of ownership and roles, combined with data denormalization, minimizes complexity and maximizes security."
+  }
+}

@@ -1,0 +1,171 @@
+/**
+ * This Firestore Security Ruleset is designed for the Athena Insights platform.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict security model that segregates user-private data
+ * from publicly accessible application data. User profiles are strictly owned and
+ * managed by the individual user, while core application data (like company
+ * entities and their analysis) is read-only for all clients. This assumes that
+ * the entity data is populated and managed by a trusted backend service using the
+ * Firebase Admin SDK, preventing unauthorized modifications from the client-side.
+ *
+ * Data Structure:
+ * The data is organized into two main top-level collections:
+ * 1. `/users/{userId}`: Contains private user profile information. All documents
+ *    and subcollections under this path are owned by the corresponding user.
+ * 2. `/entities/{entityId}`: Contains public information about companies,
+ *    including subcollections for `alternative_data` and `analysis_results`.
+ *    This entire data tree is intended for public consumption.
+ *
+ * Key Security Decisions:
+ * - User data is strictly private. A user can only access their own document at
+ *   `/users/{userId}`.
+ * - Listing users is disabled to prevent user enumeration attacks.
+ * - All data under `/entities` is publicly readable by anyone, including
+ *   unauthenticated users, to support the application's core feature of
+ *   displaying entity analysis.
+ * - All write operations (`create`, `update`, `delete`) to the `/entities`
+ *   collection and its subcollections are disabled for clients. This creates a
+ *   secure "read-only" data source managed by a backend.
+ *
+ * Denormalization for Authorization:
+ * While this initial model is simple, it is built on the principle of
+ * denormalization. For example, the `/users/{userId}` document's `id` field must
+ * match the document ID upon creation, creating an immutable ownership link
+ * without needing extra lookups. If future features required restricted access
+ * to certain entities, an `ownerId` field or a `members` map could be added to
+ * the `/entities/{entityId}` documents to enable more granular, performant rules.
+ *
+ * Structural Segregation:
+ * The ruleset leverages structural segregation for security and performance.
+ * Private user data is in its own collection (`/users`), completely separate from
+ * the public data in `/entities`. This prevents accidental data leakage and makes
+ * security rules for list operations simple and secure.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // Helper Functions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Verifies that the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Verifies that the authenticated user's UID matches the provided userId.
+     * This is the foundation of the user-ownership model.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Checks if a document currently exists in Firestore.
+     * Crucial for preventing writes to non-existent documents.
+     */
+    function isExistingDocument() {
+      return resource != null;
+    }
+
+    /**
+     * Combines ownership check with an existence check for update/delete operations.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && isExistingDocument();
+    }
+
+    /**
+     * On create, validates that the new document's internal 'id' field
+     * matches the user's auth UID, enforcing a consistent ownership link.
+     */
+    function isSelfAssigned(userId) {
+      return request.resource.data.id == userId;
+    }
+
+    /**
+     * On update, ensures the internal 'id' field cannot be changed,
+     * making the ownership link immutable.
+     */
+    function isImmutableId() {
+      return request.resource.data.id == resource.data.id;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // User Profiles (/users)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @description Controls access to user profile documents.
+     * @path /users/{userId}
+     * @allow (create) An authenticated user can create their own profile document.
+     * @allow (get, update, delete) A user can read, update, or delete their OWN profile.
+     * @deny (list) No one can list all users in the database.
+     * @deny (get) A user cannot read another user's profile.
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && isSelfAssigned(userId);
+      allow update: if isExistingOwner(userId) && isImmutableId();
+      allow delete: if isExistingOwner(userId);
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Entity Data (/entities)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @description Controls access to entity documents and their subcollections.
+     * @path /entities/{entityId}
+     * @allow (get, list) Anyone, including unauthenticated users, can read entity data.
+     * @deny (create, update, delete) No client can write to the entities collection.
+     * @principle Provides public read-only access to core application data.
+     */
+    match /entities/{entityId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+
+      /**
+       * @description Controls access to alternative data for an entity.
+       * @path /entities/{entityId}/alternative_data/{alternativeDataId}
+       * @allow (get, list) Anyone can read alternative data.
+       * @deny (create, update, delete) No client can write alternative data.
+       * @principle Inherits the public read-only posture from its parent collection.
+       */
+      match /alternative_data/{alternativeDataId} {
+        allow get: if true;
+        allow list: if true;
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      /**
+       * @description Controls access to analysis results for an entity.
+       * @path /entities/{entityId}/analysis_results/{analysisResultId}
+       * @allow (get, list) Anyone can read analysis results.
+       * @deny (create, update, delete) No client can write analysis results.
+       * @principle Inherits the public read-only posture from its parent collection.
+       */
+      match /analysis_results/{analysisResultId} {
+        allow get: if true;
+        allow list: if true;
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+  }
+}
